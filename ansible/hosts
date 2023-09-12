@@ -1,0 +1,11 @@
+[control]
+control1 ansible_host=3.222.116.94 ansible_user=ubuntu
+
+[workers]
+worker1 ansible_host=3.235.106.245 ansible_user=ubuntu
+worker2 ansible_host=3.238.31.211 ansible_user=ubuntu
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_private_key_file=~/Downloads/cka_pair.pem
+ansible_ssh_common_args='-oStrictHostKeyChecking=no'

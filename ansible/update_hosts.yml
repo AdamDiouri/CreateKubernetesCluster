@@ -1,0 +1,23 @@
+---
+- hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Update hostname
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Update /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        block: |
+                 172.31.111.188 control
+                 172.31.103.184 worker1
+                 172.31.104.40 worker2
+
+    - name: Check if it was added correctly
+      command: cat /etc/hosts
+      register: output
+
+    - debug: msg="{{ output.stdout }}"

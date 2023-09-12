@@ -1,0 +1,119 @@
+---
+- hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Create containerd and kubernetes networking configuration file
+      file:
+        path: "{{ item }}"
+        state: touch
+      with_items:
+        - "/etc/modules-load.d/containerd.conf"
+        - "/etc/sysctl.d/99-kubernetes-cri.conf"
+        - "/etc/apt/sources.list.d/kubernetes.list"
+
+    - name: Add conf for containerd
+      blockinfile:
+        path: "/etc/modules-load.d/containerd.conf"
+        block: |
+                overlay
+                br_netfilter
+
+    - name: modprobe
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - overlay
+        - br_netfilter
+
+    - name: Add conf for kubernetes-cri
+      blockinfile:
+        path: "/etc/sysctl.d/99-kubernetes-cri.conf"
+        block: |
+                net.bridge.bridge-nf-call-iptables = 1
+                net.ipv4.ip_forward = 1
+                net.bridge.bridge-nf-call-ip6tables = 1
+
+    - name: Apply new settings
+      shell: sudo sysctl --system
+
+    - name: Update ubuntu
+      apt:
+        update_cache: yes
+
+    - name: Install required dependencies
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - virtualenv
+          - python3-setuptools
+        state: latest
+        update_cache: true
+
+    # - name: Add Docker GPG apt Key
+    #   apt_key:
+    #     url: https://download.docker.com/linux/ubuntu/gpg
+    #     state: present
+
+    # - name: Add Docker Repository
+    #   apt_repository:
+    #     repo: deb https://download.docker.com/linux/ubuntu focal stable
+    #     state: present
+
+    # - name: Update apt and install docker-ce
+    #   apt:
+    #     name: docker-ce
+    #     state: latest
+    #     update_cache: true
+
+    # - name: Install Docker Module for Python
+    #   pip:
+    #     name: docker
+
+    - name: Install docker
+      shell: |
+              sudo mkdir -m 0755 -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update
+              sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    - name: Create containerd configuration
+      shell: |
+               wget https://github.com/containerd/containerd/releases/download/v1.6.12/containerd-1.6.12-linux-amd64.tar.gz
+               tar xvf containerd-1.6.12-linux-amd64.tar.gz
+               systemctl stop containerd
+               cd bin
+               cp * /usr/bin/
+               systemctl start containerd
+               sudo mkdir -p /etc/containerd
+               sudo containerd config default | sudo tee /etc/containerd/config.toml
+               sudo systemctl restart containerd
+
+    - name: Disable swap
+      shell: |
+               sudo swapoff -a
+               sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+    - name: Install and configure dependencies
+      shell: |
+               sudo apt install -y apt-transport-https curl
+               curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+    - name: Add K8s source
+      blockinfile:
+        path: "/etc/apt/sources.list.d/kubernetes.list"
+        block: |
+                 deb https://apt.kubernetes.io/ kubernetes-xenial main
+
+    - name: Install kubernetes
+      shell: |
+               sudo apt-get update
+               sudo apt-get install -y kubelet=1.24.0-00 kubeadm=1.24.0-00 kubectl=1.24.0-00
+               sudo apt-mark hold kubelet kubeadm kubectl

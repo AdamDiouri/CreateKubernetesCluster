@@ -1,0 +1,29 @@
+---
+- hosts: control
+  become: yes
+
+  tasks:
+    - name: Create /v01 folder
+      file:
+        path: /v01/
+        state: directory
+        owner: ubuntu
+
+    - name: Create partition
+      parted:
+        device: /dev/xvdx
+        number: 1
+        state: present
+        fs_type: ext4
+
+    - name: Format new partition
+      filesystem:
+        fstype: ext4
+        dev: /dev/xvdx1
+
+    - name: Mount new partition
+      mount:
+        fstype: ext4
+        src: /dev/xvdx1
+        path: /v01
+        state: mounted
